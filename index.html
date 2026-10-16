@@ -76,17 +76,15 @@
 
 <script type="module">
 const firebaseConfig = {
-  apiKey: "PUT_YOUR_API_KEY",
-  authDomain: "PUT_YOUR_PROJECT.firebaseapp.com",
-  projectId: "PUT_YOUR_PROJECT_ID",
-  storageBucket: "PUT_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PUT_YOUR_SENDER_ID",
-  appId: "PUT_YOUR_APP_ID"
+  apiKey: "AIzaSyBiWGDH96wJugWsrNCbS3ft_uyJ3LQizzk",
+  authDomain: "snep-7c950.firebaseapp.com",
+  projectId: "snep-7c950",
+  storageBucket: "snep-7c950.firebasestorage.app",
+  messagingSenderId: "788298992373",
+  appId: "1:788298992373:web:51cbf329f5a610956e53bc"
 };
 
-const ADMIN_EMAIL = "admin@example.com";
-const OTHER_EMAIL = "friend@example.com";
-const ALLOWED = [ADMIN_EMAIL, OTHER_EMAIL];
+const ADMIN_EMAIL = "aill1093r@gmail.com";
 const VIEW_SECONDS = 8;
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -121,7 +119,9 @@ function arabicError(code) {
     "auth/user-not-found": "الحساب غير موجود",
     "auth/wrong-password": "كلمة المرور خطأ",
     "auth/network-request-failed": "مشكلة في الإنترنت",
-    "auth/too-many-requests": "محاولات كثيرة، انتظر قليلاً"
+    "auth/too-many-requests": "محاولات كثيرة، انتظر قليلاً",
+    "auth/operation-not-allowed": "التسجيل مغلق",
+    "auth/unauthorized-domain": "الدومين غير مضاف في Firebase (Authorized domains)"
   };
   return map[code] || ("خطأ: " + code);
 }
@@ -137,7 +137,6 @@ $("authBtn").onclick = async () => {
   const email = $("email").value.trim().toLowerCase();
   const pass = $("pass").value;
   $("err").textContent = "";
-  if (!ALLOWED.includes(email)) { $("err").textContent = "هذا البريد غير مسموح له"; return; }
   try {
     if (signupMode) await createUserWithEmailAndPassword(auth, email, pass);
     else await signInWithEmailAndPassword(auth, email, pass);
@@ -152,7 +151,7 @@ onAuthStateChanged(auth, (user) => {
   me = { uid: user.uid, email: (user.email || "").toLowerCase() };
   me.name = me.email.split("@")[0];
   $("who").textContent = "👤 " + me.name;
-  $("clearBtn").style.display = me.email === ADMIN_EMAIL ? "inline-block" : "none";
+  $("clearBtn").style.display = me.email === ADMIN_EMAIL.toLowerCase() ? "inline-block" : "none";
   show("chat");
   const q = query(msgsCol, orderBy("createdAt", "asc"), limit(200));
   unsub = onSnapshot(q, render, (e) => {
@@ -183,100 +182,4 @@ function render(snap) {
     const m = docSnap.data();
     const isMine = m.uid === me.uid;
     const el = document.createElement("div");
-    el.className = "msg " + (isMine ? "mine" : "theirs");
-
-    if (m.image) {
-      el.classList.add("snap");
-      if (isMine) {
-        el.classList.add("sent");
-        el.textContent = "📷 صورة مرسلة (لم تُشاهد بعد)";
-      } else {
-        el.style.cursor = "pointer";
-        el.textContent = "📷 اضغط لمشاهدة الصورة";
-        el.onclick = () => openSnap(docSnap.id, m.image);
-      }
-    } else {
-      el.textContent = m.text || "";
-    }
-    const s = document.createElement("small");
-    s.textContent = (isMine ? "أنت" : (m.name || "")) + " · " + timeText(m.createdAt || Date.now());
-    el.appendChild(s);
-    list.appendChild(el);
-  });
-  list.scrollTop = list.scrollHeight;
-}
-
-async function sendText() {
-  const t = $("msgInput").value.trim();
-  if (!t || !me) return;
-  $("msgInput").value = "";
-  try {
-    await addDoc(msgsCol, { uid: me.uid, name: me.name, text: t, createdAt: Date.now() });
-  } catch (e) { alert("فشل الإرسال: " + e.code); }
-}
-$("sendBtn").onclick = sendText;
-$("msgInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendText(); });
-
-$("camBtn").onclick = () => $("file").click();
-$("file").onchange = async (e) => {
-  const f = e.target.files[0];
-  e.target.value = "";
-  if (!f || !me) return;
-  try {
-    const data = await compress(f, 800, 0.6);
-    await addDoc(msgsCol, { uid: me.uid, name: me.name, image: data, createdAt: Date.now() });
-  } catch (err) { alert("فشل إرسال الصورة: " + (err.code || err.message)); }
-};
-
-function compress(file, maxSide, quality) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      let w = img.width, h = img.height;
-      const r = Math.min(1, maxSide / Math.max(w, h));
-      w = Math.round(w * r); h = Math.round(h * r);
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL("image/jpeg", quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("تعذر قراءة الصورة")); };
-    img.src = url;
-  });
-}
-
-let timerId = null;
-function openSnap(id, data) {
-  if (viewing) return;
-  viewing = true;
-  $("viewImg").src = data;
-  $("viewer").classList.add("show");
-  let left = VIEW_SECONDS;
-  $("timer").textContent = left;
-  const finish = async () => {
-    clearInterval(timerId);
-    $("viewer").classList.remove("show");
-    $("viewImg").src = "";
-    viewing = false;
-    try { await deleteDoc(doc(db, "messages", id)); } catch (e) { console.error(e); }
-  };
-  timerId = setInterval(() => {
-    left -= 1;
-    $("timer").textContent = left;
-    if (left <= 0) finish();
-  }, 1000);
-  $("viewer").onclick = finish;
-}
-
-$("clearBtn").onclick = async () => {
-  if (!confirm("تأكد: مسح كل الرسائل؟")) return;
-  try {
-    const all = await getDocs(msgsCol);
-    await Promise.all(all.docs.map(d => deleteDoc(d.ref)));
-  } catch (e) { alert("فشل المسح: " + e.code); }
-};
-</script>
-</body>
-</html>
+    el.
